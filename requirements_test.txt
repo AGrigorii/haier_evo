@@ -1,0 +1,6 @@
+# Home Assistant the tests run against (the version the integration is used with)
+homeassistant==2026.10.4
+# the integration's own requirements (manifest.json)
+requests>=2.31.0
+websocket-client>=1.8.0,<2
+pytest>=8.4
