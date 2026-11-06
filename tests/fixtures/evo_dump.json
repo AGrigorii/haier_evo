@@ -31,7 +31,7 @@
           },
           "data": {
            "component_position": "0",
-           "device_id": "1705447",
+           "device_id": "1",
            "deeplink": "haierevo://device?deviceId=5c%3A01%3A3b%3A00%3A00%3A01&type=WH&serialNum=SNWH0000000000000001&uitype=WH_BASE"
           }
          }
@@ -52,7 +52,7 @@
           },
           "data": {
            "component_position": "1",
-           "device_id": "351105",
+           "device_id": "2",
            "deeplink": "haierevo://device?deviceId=a0%3Aa3%3Ab3%3A00%3A00%3A02&type=AC&serialNum=SNAC0000000000000002&uitype=AC_BASE"
           }
          }
@@ -73,7 +73,7 @@
           },
           "data": {
            "component_position": "2",
-           "device_id": "493847",
+           "device_id": "3",
            "deeplink": "haierevo://device?deviceId=30%3Ac9%3A22%3A00%3A00%3A03&type=AC&serialNum=SNAC0000000000000003&uitype=AC_BASE"
           }
          }
@@ -94,7 +94,7 @@
           },
           "data": {
            "component_position": "3",
-           "device_id": "515516",
+           "device_id": "4",
            "deeplink": "haierevo://device?deviceId=30%3Ac9%3A22%3A00%3A00%3A04&type=AC&serialNum=SNAC0000000000000004&uitype=AC_BASE"
           }
          }
