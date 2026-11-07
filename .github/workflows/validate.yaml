@@ -58,38 +58,106 @@ jobs:
         run: python3 scripts/ha_versions.py --summary >> "$GITHUB_STEP_SUMMARY"
 
   # One step per version, each in the Home Assistant container of that version.
-  # A failing step does not skip the next ones; only "next" may fail.
+  # A failing step does not skip the next ones; only "next" may fail. Every
+  # step writes the counts of its checks; "Results" turns them into the summary
+  # of the run and the README badges (scripts/ci_results.py).
   tests:
     needs: ha-versions
     runs-on: "ubuntu-latest"
     timeout-minutes: 45
+    outputs:
+      tests: ${{ steps.results.outputs.tests }}
+      home_assistant: ${{ steps.results.outputs.home_assistant }}
     steps:
       - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
         with:
           persist-credentials: false
       - name: "Home Assistant ${{ needs.ha-versions.outputs.minimum }} (minimum of hacs.json)"
+        id: minimum
         if: ${{ !cancelled() && needs.ha-versions.outputs.minimum != '' }}
         env:
           HA_TAG: ${{ needs.ha-versions.outputs.minimum }}
+          CHECKS_REPORT: ${{ runner.temp }}/checks/minimum.jsonl
         run: scripts/run_checks.sh "$HA_TAG"
       - name: "Home Assistant ${{ needs.ha-versions.outputs.prev2 }} (previous but one)"
+        id: prev2
         if: ${{ !cancelled() }}
         env:
           HA_TAG: ${{ needs.ha-versions.outputs.prev2 }}
+          CHECKS_REPORT: ${{ runner.temp }}/checks/prev2.jsonl
         run: scripts/run_checks.sh "$HA_TAG"
       - name: "Home Assistant ${{ needs.ha-versions.outputs.prev1 }} (previous)"
+        id: prev1
         if: ${{ !cancelled() }}
         env:
           HA_TAG: ${{ needs.ha-versions.outputs.prev1 }}
+          CHECKS_REPORT: ${{ runner.temp }}/checks/prev1.jsonl
         run: scripts/run_checks.sh "$HA_TAG"
       - name: "Home Assistant ${{ needs.ha-versions.outputs.current }} (current)"
+        id: current
         if: ${{ !cancelled() }}
         env:
           HA_TAG: ${{ needs.ha-versions.outputs.current }}
+          CHECKS_REPORT: ${{ runner.temp }}/checks/current.jsonl
         run: scripts/run_checks.sh "$HA_TAG"
       - name: "Home Assistant ${{ needs.ha-versions.outputs.next }} (next, does not block)"
+        id: next
         if: ${{ !cancelled() }}
         continue-on-error: true
         env:
           HA_TAG: ${{ needs.ha-versions.outputs.next }}
+          CHECKS_REPORT: ${{ runner.temp }}/checks/next.jsonl
         run: scripts/run_checks.sh "$HA_TAG"
+      - name: Results
+        id: results
+        if: ${{ !cancelled() }}
+        env:
+          HA_VERSIONS: ${{ toJSON(needs.ha-versions.outputs) }}
+          STEPS: ${{ toJSON(steps) }}
+        run: |
+          python3 scripts/ci_results.py --reports "$RUNNER_TEMP/checks" >> "$GITHUB_OUTPUT"
+          python3 scripts/ci_results.py --reports "$RUNNER_TEMP/checks" --summary >> "$GITHUB_STEP_SUMMARY"
+
+  # The README badges show main: its results go to the "badges" branch as
+  # shields.io endpoint files, on a push to main, on schedule and by hand,
+  # never from a pull request. The only job with a writable token; it runs
+  # no code of the repository.
+  badges:
+    needs: tests
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.tests.outputs.tests != '' }}
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    concurrency:
+      group: badges
+    steps:
+      - name: Publish to the badges branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TESTS_BADGE: ${{ needs.tests.outputs.tests }}
+          HA_BADGE: ${{ needs.tests.outputs.home_assistant }}
+        run: |
+          set -eu
+          remote="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git init -q badges && cd badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # a new commit on top of the branch, never a force push
+          if git -c http.extraheader="$auth" ls-remote --exit-code --heads "$remote" badges >/dev/null; then
+            git -c http.extraheader="$auth" fetch -q --depth=1 "$remote" badges
+            git checkout -q -B badges FETCH_HEAD
+          else
+            git checkout -q --orphan badges
+          fi
+          printf '%s\n' "$TESTS_BADGE" > tests.json
+          printf '%s\n' "$HA_BADGE" > home-assistant.json
+          git add tests.json home-assistant.json
+          if git diff --cached --quiet; then
+            echo "The badges did not change"
+            exit 0
+          fi
+          git commit -q -m "Badges for $GITHUB_SHA"
+          git -c http.extraheader="$auth" push -q "$remote" HEAD:refs/heads/badges
+          cat tests.json home-assistant.json

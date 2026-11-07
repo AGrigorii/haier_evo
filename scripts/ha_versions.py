@@ -26,6 +26,13 @@ import urllib.request
 PYPI_URL = "https://pypi.org/pypi/homeassistant/json"
 VERSION = re.compile(r"^(\d{4})\.(\d{1,2})\.(\d+)(?:b(\d+))?$")
 CHANNELS = ("minimum", "prev2", "prev1", "current", "next")
+TITLES = {
+    "minimum": "минимальная из hacs.json",
+    "prev2": "позапрошлая",
+    "prev1": "прошлая",
+    "current": "текущая",
+    "next": "следующая (не блокирует)",
+}
 
 
 def fetch_pypi(url: str = PYPI_URL, attempts: int = 3) -> dict:
@@ -86,15 +93,8 @@ def window(pypi: dict, hacs_minimum: str | None = None) -> dict[str, str]:
 
 
 def summary(versions: dict[str, str]) -> str:
-    rows = [
-        ("minimum", "минимальная из hacs.json", versions["minimum"] or "входит в окно"),
-        ("prev2", "позапрошлая", versions["prev2"]),
-        ("prev1", "прошлая", versions["prev1"]),
-        ("current", "текущая", versions["current"]),
-        ("next", "следующая (не блокирует)", versions["next"]),
-    ]
     lines = ["| Шаг | Версия Home Assistant |", "|---|---|"]
-    lines += [f"| {title} | `{value}` |" for _, title, value in rows]
+    lines += [f"| {TITLES[key]} | `{versions[key] or 'входит в окно'}` |" for key in CHANNELS]
     return "\n".join(lines) + "\n"
 
 

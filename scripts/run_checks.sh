@@ -5,6 +5,8 @@
 #   scripts/run_checks.sh dev           the nightly build
 # The same image users run: its Python and its dependencies. CI calls it once
 # per version (see scripts/ha_versions.py); it also works on any Docker host.
+# With CHECKS_REPORT=<file> the counts of passed and failed checks are written
+# there, one JSON line per script (see tests/test_checks.py).
 set -eu
 
 tag="${1:?usage: scripts/run_checks.sh <Home Assistant container tag>}"
@@ -12,13 +14,25 @@ case "$tag" in
   "" | *[!A-Za-z0-9._-]*) echo "unexpected tag: $tag" >&2; exit 2 ;;
 esac
 image="ghcr.io/home-assistant/home-assistant:$tag"
+
+# the report's directory is the only writable mount
+set --
+if [ -n "${CHECKS_REPORT:-}" ]; then
+  report_dir=$(dirname -- "$CHECKS_REPORT")
+  mkdir -p -- "$report_dir"
+  report_dir=$(cd -- "$report_dir" && pwd)
+  : > "$CHECKS_REPORT"
+  set -- -v "$report_dir:/report" -e "CHECKS_REPORT=/report/$(basename -- "$CHECKS_REPORT")"
+fi
 cd "$(dirname "$0")/.."
 
 docker pull --quiet "$image" >/dev/null
-# the checkout is mounted read-only: the checks write to temporary directories only
+# the checkout is mounted read-only: the checks write to temporary directories
+# (and to the report, if asked)
 docker run --rm --entrypoint sh \
   -v "$PWD:/repo:ro" -w /repo \
   -e PYTHONDONTWRITEBYTECODE=1 \
+  "$@" \
   "$image" -c '
     set -eu
     python3 -c "from homeassistant.const import __version__; print(\"Home Assistant\", __version__)"

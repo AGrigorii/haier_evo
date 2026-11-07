@@ -1,5 +1,5 @@
 # Haier Evo integration
-[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz) [![Release](https://img.shields.io/github/v/release/AGrigorii/haier_evo)](https://github.com/AGrigorii/haier_evo/releases/latest) [![Validate](https://github.com/AGrigorii/haier_evo/actions/workflows/validate.yaml/badge.svg)](https://github.com/AGrigorii/haier_evo/actions/workflows/validate.yaml) [![stability-stable](https://img.shields.io/badge/stability-stable-green.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#stable)
+[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz) [![Release](https://img.shields.io/github/v/release/AGrigorii/haier_evo)](https://github.com/AGrigorii/haier_evo/releases/latest) [![Validate](https://github.com/AGrigorii/haier_evo/actions/workflows/validate.yaml/badge.svg?branch=main)](https://github.com/AGrigorii/haier_evo/actions/workflows/validate.yaml?query=branch%3Amain) [![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FAGrigorii%2Fhaier_evo%2Fbadges%2Ftests.json)](https://github.com/AGrigorii/haier_evo/actions/workflows/validate.yaml?query=branch%3Amain) [![Home Assistant](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FAGrigorii%2Fhaier_evo%2Fbadges%2Fhome-assistant.json)](#разработка) [![stability-stable](https://img.shields.io/badge/stability-stable-green.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#stable)
 
 Неофициальная интеграция для работы [Haier Evo](https://haieronline.ru/evo-iot/) (RU, KZ, BY).
 
@@ -84,6 +84,14 @@
 - следующая — её последняя бета, а пока беты нет, ночная сборка `dev`. Падение этого шага сборку не валит.
 
 Версии берутся из PyPI при каждом запуске (`scripts/ha_versions.py`), так что окно сдвигается само: в день релиза Home Assistant текущая версия становится прошлой, а самая старая уходит из окна. Список версий конкретного запуска виден в его сводке.
+
+Бейджи вверху страницы показывают последний прогон на `main`:
+
+- **Validate** — итог всего CI: проверки HACS, hassfest и тесты;
+- **tests** — сколько проверок пройдено на текущей версии Home Assistant; если на какой-то версии проверки не прошли — сколько пройдено и не пройдено на худшей из них;
+- **Home Assistant** — версии из окна выше; версия, на которой проверки не прошли, отмечена ✗. Зелёный — всё прошло, жёлтый — не прошла только следующая версия, красный — не прошла одна из выпущенных.
+
+Бейджи обновляются после каждого прогона на `main`, в том числе еженедельного: CI кладёт их в ветку `badges` (`scripts/ci_results.py`), откуда их берёт shields.io. Прогоны PR бейджи не трогают. Счётчики проверок по каждой версии есть и в сводке прогона.
 
 Локально — в контейнере нужной версии (нужен Docker):
 
