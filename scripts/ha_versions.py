@@ -11,7 +11,9 @@ The window moves by itself, nothing in the repository has to be changed:
   no longer covers it, else empty: what HACS promises is always checked.
 
 Every value is a tag of ghcr.io/home-assistant/home-assistant. Prints lines
-for $GITHUB_OUTPUT; --summary prints a Markdown table for $GITHUB_STEP_SUMMARY.
+for $GITHUB_OUTPUT: one per version and "matrix", the jobs to run (a version
+without a tag has no job); --summary prints a Markdown table for
+$GITHUB_STEP_SUMMARY instead.
 Standard library only: runs on the runner's own Python.
 """
 from __future__ import annotations
@@ -33,6 +35,15 @@ TITLES = {
     "current": "текущая",
     "next": "следующая (не блокирует)",
 }
+# the names of the CI jobs: "Home Assistant 2026.9.4 (previous but one)"
+JOB_NAMES = {
+    "minimum": "minimum of hacs.json",
+    "prev2": "previous but one",
+    "prev1": "previous",
+    "current": "current",
+    "next": "next, does not block",
+}
+NON_BLOCKING = ("next",)
 
 
 def fetch_pypi(url: str = PYPI_URL, attempts: int = 3) -> dict:
@@ -98,6 +109,14 @@ def summary(versions: dict[str, str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def matrix(versions: dict[str, str]) -> list[dict]:
+    """The CI jobs, one per version with a tag, in the order of CHANNELS."""
+    return [
+        {"channel": key, "tag": versions[key], "name": JOB_NAMES[key], "blocking": key not in NON_BLOCKING}
+        for key in CHANNELS if versions[key]
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--pypi", help="a saved PyPI answer instead of asking PyPI")
@@ -118,6 +137,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(summary(versions))
     else:
         sys.stdout.write("".join(f"{key}={versions[key]}\n" for key in CHANNELS))
+        sys.stdout.write(f"matrix={json.dumps(matrix(versions))}\n")
     return 0
 
 
