@@ -1,7 +1,10 @@
 name: Validate
 
 on:
+  # a branch is checked once, by its pull request; a push runs only on main:
+  # what got merged, and the README badges come from it
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
   # Home Assistant releases and betas come out on Wednesdays: on Thursday the
