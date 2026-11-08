@@ -22,7 +22,8 @@ MAC = "5c:01:3b:00:00:01"
 S = {"mode": "normal", "connections": 0, "commands": [], "ping_reply": True, "active": 0,
      "seq": 0, "open": {},  # open: server-side connection id -> token of the client that opened it
      "tokens": [], "reject_handshake": 0, "open_ws": [], "junk": False,
-     "mute": False}  # mute: the server sends nothing at all over a session
+     "mute": False,  # mute: the server sends nothing at all over a session
+     "close_1007": set()}  # tokens the server takes the upgrade for and then closes with 1007
 
 
 async def ws_handler(request):
@@ -39,7 +40,9 @@ async def ws_handler(request):
     cid = S["seq"]
     S["open"][cid] = request.match_info["token"]
     S["open_ws"].append(ws)
-    if not S["mute"]:
+    if request.match_info["token"] in S["close_1007"]:
+        await ws.close(code=1007, message=b"Auth token not valid!")  # as the gateway does
+    elif not S["mute"]:
         # as the cloud does: the state of the devices right after an opening
         await ws.send_str(json.dumps({"event": "status", "macAddress": MAC, "payload": {"statuses": [{"properties": {}}]}}))
     if S["junk"]:
@@ -366,6 +369,22 @@ connected = wait(lambda: h._connected.is_set(), 15)
 check("handshake 401: next try connects with a refreshed token",
       connected and S["tokens"][0] == "old" and S["tokens"][-1].startswith("fresh"), f"tokens={S['tokens']}")
 stopped(h)
+
+# 14b. the upgrade is taken, then the gateway closes with 1007 "Auth token not valid!":
+# the token is renewed for the next connection (up to 1.6.3 it was tried again until
+# it expired locally, up to an hour)
+S.update(mode="normal", connections=0, commands=[], ping_reply=True, tokens=[], open_ws=[], close_1007={"refused"})
+h = TokenHaier(None, "e", "p", "ru")
+h.devices = [Dev(h)]
+h.token, h.tokenexpire = "refused", datetime.now(timezone.utc) + timedelta(minutes=10)
+api.Haier.connect_limits.reset()
+h.connect_in_thread()
+renewed = wait(lambda: h._connected.is_set() and S["tokens"] and S["tokens"][-1] != "refused", 15)
+check("close 1007 after the upgrade: the next connection has a renewed token",
+      renewed and S["tokens"][0] == "refused" and S["tokens"].count("refused") == 1 and S["tokens"][-1].startswith("fresh"),
+      f"tokens={S['tokens']}")
+stopped(h)
+S["close_1007"] = set()
 
 # 14c. a session the cloud sends nothing over is replaced; the second one in a row
 # goes with a renewed token; a served session is kept
