@@ -166,9 +166,16 @@ async def test_unload_closes_the_websocket(hass: HomeAssistant, cloud: FakeCloud
     assert DOMAIN not in hass.data or setup_entry.entry_id not in hass.data[DOMAIN]
 
 
-async def test_unload_does_not_hold_up_the_event_loop(hass: HomeAssistant, cloud: FakeCloud, setup_entry) -> None:
-    """Closing the websocket waits for the cloud's close frame (up to 3 s in
-    websocket-client): not in the event loop, where all of Home Assistant runs."""
+@pytest.mark.parametrize("answer_close", [True, False], ids=["cloud answers the close", "half-dead connection"])
+async def test_unload_does_not_hold_up_the_event_loop(
+    hass: HomeAssistant, cloud: FakeCloud, setup_entry, answer_close: bool
+) -> None:
+    """Up to 1.6.4 the unload closed the websocket in the event loop, where all
+    of Home Assistant runs, and websocket-client waited there for the cloud's
+    answer to the close frame: as long as the cloud took, up to 3 s. Now the
+    session ends at once, whatever the cloud does."""
+    cloud.answer_close = answer_close
+    client = haier(hass, setup_entry)
     gaps: list[float] = []
     done = asyncio.Event()
 
@@ -181,11 +188,15 @@ async def test_unload_does_not_hold_up_the_event_loop(hass: HomeAssistant, cloud
             last = now
 
     beat = hass.async_create_task(heartbeat())
+    started = time.monotonic()
     assert await hass.config_entries.async_unload(setup_entry.entry_id)
-    await wait_for(lambda: not cloud.sockets, "the websocket to close")
+    unload = time.monotonic() - started
+    await wait_for(lambda: not cloud.sockets, "the websocket to close", timeout=2)
+    await wait_for(lambda: not client.socket_thread.is_alive(), "the websocket thread to end", timeout=2)
     done.set()
     await beat
     assert max(gaps) < 0.5, f"the event loop stood still for {max(gaps):.1f} s"
+    assert unload < 0.5, f"the unload took {unload:.1f} s"
 
 
 async def test_reload_reconnects(hass: HomeAssistant, cloud: FakeCloud, setup_entry) -> None:

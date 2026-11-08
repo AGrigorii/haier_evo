@@ -130,6 +130,7 @@ class FakeCloud:
         self.received: list[dict] = []   # what the integration sent over the websocket
         self.err_no: int | str = 0       # errNo of every command_response
         self.answer_commands = True
+        self.answer_close = True         # False: a half-dead connection, the close frame gets no answer
         self._runner: web.AppRunner | None = None
 
     async def start(self) -> None:
@@ -267,7 +268,8 @@ class FakeCloud:
             return web.Response(status=503)
         if token not in self.access:
             return web.Response(status=401)
-        ws = web.WebSocketResponse()
+        # the close frame of the integration is answered below (or not)
+        ws = web.WebSocketResponse(autoclose=False)
         await ws.prepare(request)
         self.sockets.append(ws)
         try:
@@ -292,6 +294,14 @@ class FakeCloud:
                     commands = message.get("commands") or [message.get("command") or {}]
                     values = {str(c["commandName"]): c["value"] for c in commands if "commandName" in c}
                     await self.push(mac, values)
+            if self.answer_close:
+                await ws.close()
+            else:
+                # a half-dead connection: the close frame gets no answer, the
+                # connection stays as it is until the integration drops it
+                transport, deadline = request.transport, time.monotonic() + 10
+                while transport is not None and not transport.is_closing() and time.monotonic() < deadline:
+                    await asyncio.sleep(0.05)
         finally:
             self.sockets.remove(ws)
         return ws

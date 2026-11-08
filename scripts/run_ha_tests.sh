@@ -35,5 +35,12 @@ docker run --rm --entrypoint sh \
       exit 2
     fi
     echo "Home Assistant $after, $(python3 -m pytest --version 2>&1)"
-    python3 -m pytest -p no:cacheprovider -ra --durations=8 tests_ha
+    # a deadlock between the event loop and the websocket thread is not
+    # always ended by pytest-timeout: the whole run has 10 minutes
+    status=0
+    timeout 600 python3 -m pytest -p no:cacheprovider -ra --durations=8 tests_ha || status=$?
+    if [ "$status" -eq 124 ] || [ "$status" -eq 143 ]; then
+      echo "tests_ha did not finish in 10 minutes: something hangs" >&2
+    fi
+    exit "$status"
   '
