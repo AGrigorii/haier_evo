@@ -1888,7 +1888,7 @@ class HaierAC(HaierDevice):
         self._send_commands([
             {
                 "commandName": self.config['target_temperature'],
-                "value": str(value)
+                "value": number_text(value)
             }
         ])
         self.target_temperature = value
@@ -1929,7 +1929,7 @@ class HaierAC(HaierDevice):
             else:
                 commands.append({
                     "commandName": self.config["target_temperature"],
-                    "value": str(self._deferred_target),
+                    "value": number_text(self._deferred_target),
                 })
                 self.target_temperature = self._deferred_target
                 self._deferred_target = None
@@ -2776,6 +2776,16 @@ def parsefloat(value, default: float | None = None) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def number_text(value) -> str:
+    """A setpoint as the app sends it and the cloud reports it: "23", not "23.0".
+
+    Home Assistant's services hand over floats (23.0); a half degree stays "23.5".
+    """
+    number = float(value)
+    return str(int(number)) if number.is_integer() else str(number)
+
 
 # Parts of a device description the integration never reads: app analytics,
 # pairing details, scenario links. Links (signed for a week) are dropped too.

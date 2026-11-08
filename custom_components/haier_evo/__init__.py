@@ -55,6 +55,13 @@ def _find_device(registry: dr.DeviceRegistry, identifier: tuple[str, str], entry
     return registry.async_get_device(identifiers={identifier})
 
 
+async def _stop(hass: HomeAssistant, haier_object: api.Haier) -> None:
+    """Stop the client off the event loop: closing the websocket waits for the
+    cloud's close frame (up to 3 s in websocket-client), which must not hold
+    up Home Assistant."""
+    await hass.async_add_executor_job(haier_object.stop)
+
+
 def _token_store(hass: HomeAssistant, entry_id: str) -> Store:
     # private: 0600, atomic: a crash never leaves a half-written token file
     return Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}", private=True, atomic_writes=True)
@@ -124,7 +131,7 @@ async def _refresh(hass: HomeAssistant, entry: ConfigEntry, haier_object: api.Ha
         listed = await hass.async_add_executor_job(haier_object.list_device_ids)
     except (api.ReauthRequired, api.AuthUserError) as e:
         _LOGGER.error(f"Haier Evo rejected the saved sign-in, re-authentication is needed: {e!r}")
-        haier_object.stop()
+        await _stop(hass, haier_object)
         entry.async_start_reauth(hass)
         return
     known = {d.device_id.lower() for d in haier_object.devices}
@@ -135,7 +142,7 @@ async def _refresh(hass: HomeAssistant, entry: ConfigEntry, haier_object: api.Ha
             denied = await hass.async_add_executor_job(haier_object.denied_devices, new)
         except (api.ReauthRequired, api.AuthUserError) as e:
             _LOGGER.error(f"Haier Evo rejected the saved sign-in, re-authentication is needed: {e!r}")
-            haier_object.stop()
+            await _stop(hass, haier_object)
             entry.async_start_reauth(hass)
             return
         if new - denied:
@@ -158,7 +165,7 @@ async def _refresh_state(hass: HomeAssistant, entry: ConfigEntry, haier_object: 
         result = await hass.async_add_executor_job(haier_object.refresh_devices)
     except (api.ReauthRequired, api.AuthUserError) as e:
         _LOGGER.error(f"Haier Evo rejected the saved sign-in, re-authentication is needed: {e!r}")
-        haier_object.stop()
+        await _stop(hass, haier_object)
         entry.async_start_reauth(hass)
         return
     except Exception as e:
@@ -260,23 +267,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         try:
             await hass.async_add_executor_job(haier_object.pull_data)
         except (api.ReauthRequired, api.AuthUserError) as e:
-            haier_object.stop()
+            await _stop(hass, haier_object)
             raise ConfigEntryAuthFailed(f"Haier Evo needs signing in again: {e!r}") from e
         except Exception as e:
-            haier_object.stop()
+            await _stop(hass, haier_object)
             # network problems, cloud errors, timeouts: let Home Assistant retry the setup
             raise ConfigEntryNotReady(f"Haier Evo is not available: {e!r}") from e
 
         found = {str(device.device_id).lower() for device in haier_object.devices}
         missing = _known_device_ids(hass, entry) - found
         if not found:
-            haier_object.stop()
+            await _stop(hass, haier_object)
             raise ConfigEntryNotReady("Haier Evo returned an empty device list")
         if missing:
             attempts = _INCOMPLETE_SETUPS.get(entry.entry_id, 0) + 1
             if attempts <= SETUP_INCOMPLETE_RETRIES:
                 _INCOMPLETE_SETUPS[entry.entry_id] = attempts
-                haier_object.stop()
+                await _stop(hass, haier_object)
                 raise ConfigEntryNotReady(
                     f"Haier Evo did not return {len(missing)} known device(s): "
                     f"{', '.join(sorted(missing))} (attempt {attempts}/{SETUP_INCOMPLETE_RETRIES})"
@@ -332,7 +339,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         haier_object = hass.data[DOMAIN].pop(entry.entry_id)
         _LOGGER.debug(f'Integration {haier_object} unload...')
-        haier_object.stop()
+        await _stop(hass, haier_object)
     return unload_ok
 
 
