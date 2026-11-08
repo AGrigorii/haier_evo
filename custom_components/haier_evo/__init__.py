@@ -56,10 +56,14 @@ def _find_device(registry: dr.DeviceRegistry, identifier: tuple[str, str], entry
 
 
 async def _stop(hass: HomeAssistant, haier_object: api.Haier) -> None:
-    """Stop the client off the event loop: closing the websocket waits for the
-    cloud's close frame (up to 3 s in websocket-client), which must not hold
-    up Home Assistant."""
-    await hass.async_add_executor_job(haier_object.stop)
+    """Stop the client off the event loop, as the fork JampireX/haier_evo does:
+    it closes sockets (up to 1.6.4 it also waited there for the cloud's answer
+    to the websocket close, freezing Home Assistant for up to 3 s). A failure
+    must not mask the setup error being raised or fail the unload."""
+    try:
+        await hass.async_add_executor_job(haier_object.stop)
+    except Exception as e:
+        _LOGGER.warning(f"Haier Evo: stopping the connection failed: {e!r}")
 
 
 def _token_store(hass: HomeAssistant, entry_id: str) -> Store:
